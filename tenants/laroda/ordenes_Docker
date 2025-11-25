@@ -1,5 +1,3 @@
-
-
 # liberar imágenes huérfanas en el directorio que se quiera ej cd /opt/onegat
 docker image prune -af
 # liberar volúmenes no usados (cuidado)

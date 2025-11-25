@@ -1,0 +1,13 @@
+# A partir de ahora (flujo básico)
+
+git status              # ver cambios
+git add .
+git commit -m "Lo que has cambiado"
+git push                # sube a GitHub
+
+# verificación final En la terminal (desde d/py/onegat)
+
+git status
+# Debe decir:
+On branch main
+nothing to commit, working tree clean
