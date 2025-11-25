@@ -1,0 +1,165 @@
+
+
+# liberar imágenes huérfanas en el directorio que se quiera ej cd /opt/onegat
+docker image prune -af
+# liberar volúmenes no usados (cuidado)
+docker volume prune -f
+# logs ya rotan (10 MB x 3)
+////////////////////////////////////////////////////////////////////////////
+#### Construye las imágenes comunes (backend y frontend)
+cd /opt/onegat/app
+docker compose -f docker-compose.build.yml build --no-cache
+#### Reconstruir imagen del backend (sin caché)
+cd /opt/onegat/app
+docker compose -f docker-compose.build.yml build backend --no-cache
+#### Comprueba que los contenedores estén en ejecución
+docker ps
+
+############################################################################### Levanta el tenant limpio
+cd /opt/onegat/tenants/laroda
+# por si quedó algo previo (esto no borra imágenes compartidas)
+docker compose -f docker-compose.prod.yml down -v
+
+# levanta usando las imágenes que acabas de construir
+cd /opt/onegat/tenants/laroda
+
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+docker compose -f docker-compose.prod.yml down
+############################################################################### Modif codigo en backend o frontend
+PASO 1 — Recompilar la imagen global del backend
+cd /opt/onegat/app
+docker compose -f docker-compose.build.yml build backend --no-cache
+PASO 2 — Reiniciar el backend del tenant que quieras
+cd /opt/onegat/tenants/prueba
+docker compose -f docker-compose.prod.yml up -d backend --force-recreate
+
+//////////////////////////////////////////////////////////////////////////
+
+# Ver estado
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+#### Observa los logs de arranque (migraciones)
+docker logs -f backend.laroda.onegat.es-backend
+
+# Comprobaciones rápidas - Debe listar tus tablas.
+docker exec -it backend.laroda.onegat.es-backend alembic current
+docker exec -it laroda-db-1 psql -U user -d colonia_gatos -c '\dt'
+
+# Acceso bd
+docker exec -it laroda-db-1 psql -U user -d colonia_gatos
+
+SELECT * FROM users;
+SELECT * FROM gatos;
+SELECT * FROM colonias;
+SELECT * FROM partes;
+SELECT * FROM campanas;
+SELECT * FROM campanas_gatos;
+SELECT * FROM inspecciones;
+SELECT * FROM quejas;
+SELECT * FROM usuarios_colonias;
+
+DELETE FROM quejas;    ////// borrar todas las quejas
+ALTER SEQUENCE quejas_id_seq RESTART WITH 1;      ////// deseas resetear el contador de id
+DELETE FROM campanas WHERE id = 1;
+DELETE FROM users WHERE id > 1;
+DELETE FROM gatos WHERE id BETWEEN 2 AND 18;
+
+ALTER TABLE quejas ADD COLUMN archivo VARCHAR(255);   /////Crear el campo manualmente en PostgreSQL///////
+ALTER TABLE users ADD COLUMN accepted_terms BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN accepted_terms_date TIMESTAMP;
+
+///actualizar manualmente el campo accepted_demo_terms a false (y opcionalmente limpiar la fecha)
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'quejas';
+
+UPDATE colonias
+SET latitude = 39.199336, longitude = -2.155380
+WHERE id = 4;
+
+UPDATE users
+SET accepted_demo_terms = FALSE,
+    accepted_demo_terms_date = NULL
+WHERE username = 'admin';
+
+UPDATE users
+SET accepted_terms = FALSE,
+    accepted_terms_date = NULL
+WHERE username = 'admin';
+/////////////////////////////////////////////////////////////////////////////
+{
+    "username": "admin",
+    "password": "adminpassword",
+    "role": "admin",
+    "email": "onegat@onegat.es"
+}
+
+{
+    "username": "admin",
+    "password": "adminpassword",
+    "accepted_terms": true
+}
+
+{
+    "username": "responsable_muni",
+    "password": "responsablepassword",
+    "role": "responsable",
+    "email": "onegatgestion@gmail.com"
+}
+
+{
+    "username": "responsable_muni",
+    "password": "responsablepassword",
+    "accepted_terms": true
+}
+
+{
+  "username": "voluntario",
+  "password": "voluntariopassword",
+  "role": "voluntario",
+  "email": "luisernaluna@gmail.com"
+}
+
+{
+    "username": "voluntario",
+    "password": "voluntariopassword",
+    "accepted_terms": true
+}
+
+{
+  "username": "veterinario",
+  "password": "veterinariopassword",
+  "role": "veterinario",
+  "email": "vet@example.com"
+}
+
+{
+    "username": "veterinario",
+    "password": "veterinariopassword"
+}
+
+{
+  "username": "usuario",
+  "password": "usuariopassword",
+  "role": "usuario",
+  "email": "altafit.albacete@gmail.com"
+}
+
+{
+    "username": "usuario",
+    "password": "usuariopassword"
+}
+
+{
+  "nombre": "Gato Ejemplo",
+  "raza": "Siamés",
+  "sexo": "Macho",
+  "edad": 3,
+  "estado_salud": "Bueno",
+  "ubicacion": "Calle Bonillo"
+}
+
+{
+  "backup_type": "full",
+  "format": "sql"
+}

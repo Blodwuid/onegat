@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+
+# Entornos virtuales
+venv/
+.env/
+.env.* 
+*.env
+*.env.*
+
+# Node / frontend
+node_modules/
+build/
+dist/
+.cache/
+npm-debug.log*
+yarn-error.log*
+
+# Informe de auditoría de frontend (generado)
+frontend/audit-report.json
+
+# Docker
+*.log
+docker-data/
+volumes/
+tmp/
+*.pid
+
+# Ignorar docker-compose locales (solo para desarrollo)
+docker-compose.local.build.yml
+docker-compose.local.prod.yml
+
+# Archivos de configuración sensibles
+*.key
+*.pem
+*.crt
+*.pfx
+*.jks
+
+# Backups / dumps
+*.tar.gz
+*.zip
+*.dump
+backups/
+backups_*/
+
+# Archivos específicos del proyecto
+tenants/*/.env
+tenants/*/.env.local
+app/.env
+**/local_settings.py
+tenants/*/backup-data/
+tenants/*/media/
+tenants/*/uploads/
+
+# Extra útiles heredados del gitignore antiguo
+*.db
+*.swp
+instance/

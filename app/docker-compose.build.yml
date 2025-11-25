@@ -1,0 +1,21 @@
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: onegat/backend:local
+    # Monta código para que las migraciones se escriban en el host
+    volumes:
+      - ./backend:/app
+    # Evita el entrypoint que espera a Postgres cuando ejecutas tareas
+    entrypoint: [""]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        REACT_APP_BACKEND_URL: https://backend.laroda.onegat.es
+        REACT_APP_SETTINGS_URL: https://backend.laroda.onegat.es/api/settings
+    image: onegat/frontend:local

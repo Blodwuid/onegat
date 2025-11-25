@@ -1,0 +1,50 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "Frontend para la gesti�n de colonia de gatos",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "obfuscate": "javascript-obfuscator build/static/js --output build/static/js --compact true --self-defending true",
+    "secure-build": "npm run build && npm run obfuscate"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.11.3",
+    "jwt-decode": "^4.0.0",
+    "leaflet": "^1.9.4",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^6.28.0",
+    "react-scripts": "^5.0.1",
+    "recharts": "^2.15.1"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "eslint": "^8.57.1",
+    "javascript-obfuscator": "^4.1.1"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "overrides": {
+    "@svgr/plugin-svgo": "^6.0.0",
+    "@svgr/webpack": "^6.0.0",
+    "css-select": "^4.1.0",
+    "nth-check": "^2.0.1",
+    "postcss": "^8.4.31",
+    "svgo": "^2.8.0"
+  }
+}

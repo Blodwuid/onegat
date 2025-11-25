@@ -1,0 +1,31 @@
+FROM node:16 AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm install --legacy-peer-deps
+
+COPY . .
+
+# ==== AÑADIR ESTO ====
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+
+ARG REACT_APP_SETTINGS_URL
+ENV REACT_APP_SETTINGS_URL=$REACT_APP_SETTINGS_URL
+# ======================
+
+# Compila y ofusca el proyecto
+RUN npm run build && npm run obfuscate
+
+# Etapa de producción: servir contenido estático
+FROM node:16 AS production
+
+RUN npm install -g serve
+
+WORKDIR /app
+COPY --from=build /app/build ./build
+
+EXPOSE 3000
+
+CMD ["serve", "-s", "build", "-l", "3000"]

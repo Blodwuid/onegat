@@ -1,0 +1,10 @@
+/* Archivo: styles.css */
+
+
+.text-gray {
+  color: #6c757d; /* Gris claro */
+}
+
+.shadow-sm {
+  box-shadow: 0px 12px 16px rgba(0, 0, 0, 0.4); /* Sombra más marcada */
+}
