@@ -1,0 +1,125 @@
+services:
+  # ---------------------
+  # Backend (FastAPI/Uvicorn)
+  # ---------------------
+  backend:
+    image: onegat/backend:local
+    container_name: ${BACKEND_VIRTUAL_HOST}-backend
+    env_file: .env
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/api/health');\" || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./media:/app/media
+      - ./backup-data:/backups
+      - ./uploads:/app/uploads
+    # IMPORTANTE: ya NO publicamos el dominio aquí (nada de VIRTUAL_HOST/LETSENCRYPT_*).
+    # El dominio del backend lo servirá el sidecar nginx-backend.
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # (el resto de variables de tu .env: JWT, límites, email, etc.)
+    expose: ["8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - app-network
+
+  # ---------------------
+  # Sidecar Nginx para el backend (maneja el preflight CORS y proxyea al servicio "backend")
+  # ---------------------
+  nginx-backend:
+    image: nginx:stable-alpine
+    container_name: ${BACKEND_VIRTUAL_HOST}-gateway
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./nginx-backend.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      VIRTUAL_HOST: ${BACKEND_VIRTUAL_HOST}
+      VIRTUAL_PORT: 80
+      LETSENCRYPT_HOST: ${BACKEND_VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    restart: always
+    networks:
+      - app-network      # para alcanzar al servicio "backend"
+      - nginx-proxy      # para ser alcanzado por el proxy global
+
+  # ---------------------
+  # Base de datos
+  # ---------------------
+  db:
+    image: postgres:13
+    env_file: .env
+    expose: ["5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - backup-data:/backups
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------
+  # Redis
+  # ---------------------
+  redis:
+    image: redis:alpine
+    expose: ["6379"]
+    networks:
+      - app-network
+
+  # ---------------------
+  # Frontend
+  # ---------------------
+  frontend:
+    build:
+      context: ../../app/frontend
+      dockerfile: Dockerfile.prod
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL}
+        REACT_APP_SETTINGS_URL: ${REACT_APP_SETTINGS_URL}
+    image: onegat/frontend:hellin
+    container_name: ${VIRTUAL_HOST}-frontend
+    env_file: .env
+    restart: always
+    environment:
+      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: ${VIRTUAL_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    depends_on:
+      - nginx-backend
+    networks:
+      - app-network
+      - nginx-proxy
+
+# ---------------------
+# Volúmenes
+# ---------------------
+volumes:
+  postgres-data:
+  backup-data:
+
+# ---------------------
+# Redes
+# ---------------------
+networks:
+  app-network:
+    driver: bridge
+  nginx-proxy:
+    external: true
