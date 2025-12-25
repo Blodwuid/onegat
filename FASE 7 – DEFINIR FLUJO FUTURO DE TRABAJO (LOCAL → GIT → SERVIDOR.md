@@ -22,6 +22,7 @@ git commit -m "Implementa X en backend/frontend"
 git push -u origin feature/nueva-funcionalidad
 
 # (Opcional) Haces un “Pull Request” de feature/nueva-funcionalidad → develop.
+git status
 # Cuando todo esté bien, mergeas a develop y luego a main.
 #7.3. Actualizar el servidor desde Git (no ahora, pero este será el flujo)
 #En el servidor, en el futuro, la idea es:

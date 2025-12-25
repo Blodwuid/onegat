@@ -94,8 +94,11 @@ const handleLogin = async () => {
 
   return (
     <KeyHandlerWrapper onEnterPress={handleLogin}>
-      <div className="container mt-5">
-        <div className="card p-4 shadow-sm">
+      <div className="d-flex justify-content-center mt-5 px-3">
+        <div
+          className="card p-4 shadow-sm"
+          style={{ width: '100%', maxWidth: '380px' }}
+        >
           <h1 className="text-center mb-3">Iniciar Sesión</h1>
           <input
             className="form-control mb-2"
@@ -125,7 +128,7 @@ const handleLogin = async () => {
                   onChange={() => setAcceptedTerms(!acceptedTerms)}
                 />
                 <label className="form-check-label" htmlFor="acceptTerms">
-                  Acepto los <a href="/condiciones-uso" target="_blank">Términos y Condiciones</a> y la <a href="/politica-privacidad" target="_blank">Política de Privacidad</a>.
+                  Acepto los <a href="/condiciones-uso" target="_blank" rel="noreferrer">Términos y Condiciones</a> y la <a href="/politica-privacidad" target="_blank" rel="noreferrer">Política de Privacidad</a>.
                 </label>
               </div>
 
