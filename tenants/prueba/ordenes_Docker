@@ -34,11 +34,9 @@ D:\py\onegat\tenants\prueba
 docker compose -f docker-compose.local.prod.yml down -v
 
 # levanta usando las imágenes que acabas de construir
-
+docker compose -f docker-compose.local.prod.yml --env-file .env.local down
 docker compose -f docker-compose.local.prod.yml --env-file .env.local up -d
-docker compose -f docker-compose.local.prod.yml --env-file .env.local down
-# (opcional) parar antes
-docker compose -f docker-compose.local.prod.yml --env-file .env.local down
+
 # levantar y reconstruir
 docker compose -f docker-compose.local.prod.yml --env-file .env.local up -d --build
 //////////////////////////////////////////////////////////////////////////

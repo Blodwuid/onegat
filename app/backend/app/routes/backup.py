@@ -1,203 +1,220 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, APIRouter, UploadFile, File
+from fastapi import Depends, HTTPException, BackgroundTasks, APIRouter, UploadFile, File
 from fastapi_jwt_auth import AuthJWT
 from pydantic import BaseModel
 import os
 import subprocess
 import datetime
 import asyncio
-import boto3  # Para almacenamiento en AWS S3
+import boto3
 from cryptography.fernet import Fernet
 from app.settings import settings
 from fastapi.responses import FileResponse
 
 router = APIRouter()
 
+# --------------------
 # Configuración
+# --------------------
 BACKUP_DIR = "/backups"
-MAX_BACKUPS = 7  # Máximo número de backups a conservar
+MAX_BACKUPS = 7
 ENCRYPTION_KEY = settings.encryption_key.encode()
 fernet = Fernet(ENCRYPTION_KEY)
 
-# Modelo para solicitud de backup
+DB_HOST = "db"
+DB_NAME = "colonia_gatos"
+DB_USER = os.getenv("POSTGRES_USER", "user")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
+
+# --------------------
+# Modelos
+# --------------------
 class BackupRequest(BaseModel):
     backup_type: str  # full o incremental
-    format: str  # sql o json
+    format: str       # sql (conceptual, realmente usamos formato custom)
 
-# Protección con AuthJWT
+# --------------------
+# Crear backup
+# --------------------
 @router.post("/backup")
 def backup(request: BackupRequest, background_tasks: BackgroundTasks, Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
-    user_claims = Authorize.get_raw_jwt()
-    if user_claims.get("role") != "admin":
+    if Authorize.get_raw_jwt().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized action")
-    
-    background_tasks.add_task(create_backup, request.backup_type, request.format)
+
+    background_tasks.add_task(create_backup, request.backup_type)
     return {"message": "Backup en proceso"}
 
-# Función para generar backup
-def create_backup(backup_type: str, format: str):
+def create_backup(backup_type: str):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    backup_filename = f"backup_{backup_type}_{timestamp}.{format}"
+    backup_filename = f"backup_{backup_type}_{timestamp}.dump"
     backup_path = os.path.join(BACKUP_DIR, backup_filename)
-    
-    # Comando para crear el backup
+
     cmd = (
-        f"PGPASSWORD='{os.getenv('POSTGRES_PASSWORD', 'password')}' "
-        f"pg_dump -h db -U {os.getenv('POSTGRES_USER', 'user')} -F c -f {backup_path} colonia_gatos"
+        f"PGPASSWORD='{DB_PASSWORD}' "
+        f"pg_dump -h {DB_HOST} -U {DB_USER} -F c "
+        f"-f {backup_path} {DB_NAME}"
     )
 
     try:
         subprocess.run(cmd, shell=True, check=True)
 
-        # Cifrar archivo
-        with open(backup_path, 'rb') as file:
-            encrypted_data = fernet.encrypt(file.read())
+        # Cifrar backup
+        with open(backup_path, "rb") as f:
+            encrypted = fernet.encrypt(f.read())
 
-        with open(backup_path, 'wb') as file:
-            file.write(encrypted_data)
+        with open(backup_path, "wb") as f:
+            f.write(encrypted)
 
-        # Eliminar backups antiguos si hay más de los permitidos
         delete_old_backups()
 
         return {"backup_file": backup_filename, "timestamp": timestamp}
 
     except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"Error al crear el backup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al crear el backup: {e}")
 
-# Eliminar backups antiguos
 def delete_old_backups():
     backups = sorted(
         [f for f in os.listdir(BACKUP_DIR) if f.startswith("backup_")],
         key=lambda f: os.path.getctime(os.path.join(BACKUP_DIR, f))
     )
     while len(backups) > MAX_BACKUPS:
-        old_backup = backups.pop(0)
-        os.remove(os.path.join(BACKUP_DIR, old_backup))
+        os.remove(os.path.join(BACKUP_DIR, backups.pop(0)))
 
+# --------------------
 # Restaurar backup
+# --------------------
 @router.post("/restore")
 def restore(backup_filename: str, Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
-    user_claims = Authorize.get_raw_jwt()
-    if user_claims.get("role") != "admin":
+    if Authorize.get_raw_jwt().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized action")
-    
+
     return restore_backup(backup_filename)
 
 def restore_backup(backup_filename: str):
     backup_path = os.path.join(BACKUP_DIR, backup_filename)
-    
+
     if not os.path.exists(backup_path):
         raise HTTPException(status_code=404, detail="Backup no encontrado")
 
-    # Descifrar archivo antes de restaurarlo
-    with open(backup_path, 'rb') as file:
-        decrypted_data = fernet.decrypt(file.read())
-
-    with open(backup_path, 'wb') as file:
-        file.write(decrypted_data)
-
-    cmd = (
-        f"PGPASSWORD='{os.getenv('POSTGRES_PASSWORD', 'password')}' "
-        f"psql -h db -U {os.getenv('POSTGRES_USER', 'user')} -d colonia_gatos -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'"
-    )
-    cmd += (
-        f" && PGPASSWORD='{os.getenv('POSTGRES_PASSWORD', 'password')}' "
-        f"pg_restore -h db -U {os.getenv('POSTGRES_USER', 'user')} -d colonia_gatos {backup_path}"
-    )
+    tmp_restore_path = f"/tmp/restore_{backup_filename}"
 
     try:
-        subprocess.run(cmd, shell=True, check=True)
-        return {"message": "Restauración completada"}
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"Error al restaurar el backup: {str(e)}")
+        # Descifrar a fichero temporal
+        with open(backup_path, "rb") as f:
+            decrypted = fernet.decrypt(f.read())
 
-# Automatización de backups
+        with open(tmp_restore_path, "wb") as f:
+            f.write(decrypted)
+
+        cmd = (
+            f"PGPASSWORD='{DB_PASSWORD}' "
+            f"psql -h {DB_HOST} -U {DB_USER} -d {DB_NAME} "
+            f"-c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'"
+            f" && "
+            f"PGPASSWORD='{DB_PASSWORD}' "
+            f"pg_restore "
+            f"--clean --if-exists "
+            f"--no-owner --no-privileges "
+            f"-h {DB_HOST} -U {DB_USER} -d {DB_NAME} "
+            f"{tmp_restore_path}"
+        )
+
+        result = subprocess.run(cmd, shell=True)
+        if result.returncode not in (0, 1):
+            raise HTTPException(
+                status_code=500,
+                detail="Error grave durante la restauración del backup"
+            )
+
+        return {"message": "Restauración completada correctamente"}
+
+    finally:
+        if os.path.exists(tmp_restore_path):
+            os.remove(tmp_restore_path)
+
+# --------------------
+# Backup automático
+# --------------------
 async def scheduled_backup():
     while True:
-        await asyncio.sleep(86400)  # Ejecutar cada 24 horas
-        create_backup("full", "sql")
+        await asyncio.sleep(86400)
+        create_backup("full")
 
 @router.on_event("startup")
 async def startup_event():
     asyncio.create_task(scheduled_backup())
 
-# Subir backup a AWS S3
+# --------------------
+# S3
+# --------------------
 def upload_to_s3(file_path, bucket_name, object_name):
     try:
-        s3 = boto3.client('s3')
-        s3.upload_file(file_path, bucket_name, object_name)
+        boto3.client("s3").upload_file(file_path, bucket_name, object_name)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al subir a S3: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al subir a S3: {e}")
 
 @router.post("/backup/upload")
 def upload_backup(backup_filename: str, bucket_name: str, Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
-    user_claims = Authorize.get_raw_jwt()
-    if user_claims.get("role") != "admin":
+    if Authorize.get_raw_jwt().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized action")
-    
-    backup_path = os.path.join(BACKUP_DIR, backup_filename)
-    if not os.path.exists(backup_path):
+
+    path = os.path.join(BACKUP_DIR, backup_filename)
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Backup no encontrado")
 
-    upload_to_s3(backup_path, bucket_name, backup_filename)
+    upload_to_s3(path, bucket_name, backup_filename)
     return {"message": "Backup subido a S3"}
 
-# Eliminar backup manualmente
+# --------------------
+# Gestión de backups
+# --------------------
 @router.delete("/backup/delete")
 def delete_backup(backup_filename: str, Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
-    user_claims = Authorize.get_raw_jwt()
-    if user_claims.get("role") != "admin":
+    if Authorize.get_raw_jwt().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized action")
 
-    backup_path = os.path.join(BACKUP_DIR, backup_filename)
-    if not os.path.exists(backup_path):
+    path = os.path.join(BACKUP_DIR, backup_filename)
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Backup no encontrado")
 
-    os.remove(backup_path)
-    return {"message": f"Backup {backup_filename} eliminado correctamente"}
+    os.remove(path)
+    return {"message": f"Backup {backup_filename} eliminado"}
 
-# Listar backups
 @router.get("/backup/list")
 def list_backups():
-    try:
-        backups = sorted(
-            os.listdir(BACKUP_DIR),
-            key=lambda f: os.path.getctime(os.path.join(BACKUP_DIR, f)),
-            reverse=True  # Mostrar los más recientes primero
-        )
-        return {"backups": backups}
-    except Exception as e:
-        return {"error": str(e)}
+    backups = sorted(
+        os.listdir(BACKUP_DIR),
+        key=lambda f: os.path.getctime(os.path.join(BACKUP_DIR, f)),
+        reverse=True
+    )
+    return {"backups": backups}
 
-# Descarga de backups
 @router.get("/backup/download/{backup_filename}")
 def download_backup(backup_filename: str, Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
-    user_claims = Authorize.get_raw_jwt()
-    if user_claims.get("role") != "admin":
+    if Authorize.get_raw_jwt().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized action")
-    
-    backup_path = os.path.join(BACKUP_DIR, backup_filename)
-    
-    if not os.path.exists(backup_path):
-        raise HTTPException(status_code=404, detail="Backup not found")
-    
-    return FileResponse(backup_path, filename=backup_filename, media_type="application/octet-stream")
 
+    path = os.path.join(BACKUP_DIR, backup_filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Backup no encontrado")
+
+    return FileResponse(path, filename=backup_filename, media_type="application/octet-stream")
+
+# --------------------
+# Importar backup
+# --------------------
 @router.post("/backup/import")
 async def import_backup(file: UploadFile = File(...), Authorize: AuthJWT = Depends()):
     Authorize.jwt_required()
-    user_claims = Authorize.get_raw_jwt()
-    if user_claims.get("role") != "admin":
+    if Authorize.get_raw_jwt().get("role") != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized action")
 
-    # Guardar el archivo en /backups
     backup_path = os.path.join(BACKUP_DIR, file.filename)
     with open(backup_path, "wb") as f:
         f.write(await file.read())
 
-    # Restaurar backup usando la lógica existente
     return restore_backup(file.filename)
