@@ -159,14 +159,23 @@ docker compose up -d
 cd /opt/onegat/tenants/<TENANT>
 cp .env .env.bak-$(date +%Y%m%d-%H%M)
 nano .env
-docker compose up -d
+docker compose -f docker-compose.prod.yml up -d
+
 ```
 
 - Misma imagen
 - Nuevo entorno
 - Downtime mínimo
 
----
+Comprobación recomendada (opcional pero rigurosa)
+
+Antes de levantar:
+```bash
+docker compose -f docker-compose.prod.yml config
+
+```
+Si eso no da error, el up -d es seguro.
+
 
 ### 5.3 Procedimiento reforzado (si hay estado raro)
 
