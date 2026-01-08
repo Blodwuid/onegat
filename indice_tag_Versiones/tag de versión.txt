@@ -2,3 +2,5 @@ TAG="v$(date +%Y%m%d-%H%M)"
 
 1- v20251229-2153- Solución error de backup
 2 - Bug cajón login/Bug MensajesxAlert (archivo modif Login.js)
+3 - Vulnerabilidad: Posible RCE mediante parámetro backup_filename (en local y git subido archivo modificado Backup.py 20260106-2120
+4 - Vulnerabilidad – Análisis de Autenticación y Autorización JWT
