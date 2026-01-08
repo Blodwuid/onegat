@@ -249,9 +249,14 @@ def delete_backup(backup_filename: str, Authorize: AuthJWT = Depends()):
     return {"message": f"Backup {backup_filename} eliminado"}
 
 @router.get("/backup/list")
-def list_backups():
+def list_backups(Authorize: AuthJWT = Depends()):
+    Authorize.jwt_required()
+    if Authorize.get_raw_jwt().get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Unauthorized action")
+    
     backups = sorted(
-        [f.name for f in BACKUP_DIR_PATH.iterdir() if f.is_file()],
+        os.listdir(BACKUP_DIR),
+        key=lambda f: os.path.getctime(os.path.join(BACKUP_DIR, f)),
         reverse=True
     )
     return {"backups": backups}
