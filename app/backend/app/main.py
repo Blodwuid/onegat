@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi_jwt_auth import AuthJWT
 from fastapi_jwt_auth.exceptions import AuthJWTException
 from fastapi.responses import JSONResponse, Response
-from app.settings import Settings, settings
+from app.settings import settings
 from fastapi.openapi.utils import get_openapi
 import os
 import json
@@ -50,7 +50,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # Configuración de AuthJWT
 @AuthJWT.load_config
 def get_config():
-    return Settings()
+    return settings
 
 @app.exception_handler(AuthJWTException)
 def authjwt_exception_handler(request, exc):

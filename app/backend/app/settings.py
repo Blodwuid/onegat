@@ -5,6 +5,9 @@ from typing import Optional, List
 class Settings(BaseSettings):
     authjwt_secret_key: str
     authjwt_access_token_expires: int
+    # Hardening JWT (añadir)
+    authjwt_algorithm: str = "HS256"
+    authjwt_decode_algorithms: List[str] = ["HS256"]
     encryption_key: str  # Nueva variable para la clave de cifrado
     expiration_date: datetime = Field(..., env="EXPIRATION_DATE")
 
