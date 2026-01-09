@@ -1,4 +1,3 @@
-
 import React, { useState, useContext } from 'react';
 import api from '../api/api';
 import { useNavigate, Link } from 'react-router-dom';
@@ -11,109 +10,111 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [mustAcceptTerms, setMustAcceptTerms] = useState(false);
+  const [loginError, setLoginError] = useState(''); // 🔴 NUEVO
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
   const [showLegalModal, setShowLegalModal] = useState(false);
-  const API = process.env.REACT_APP_BACKEND_URL;
 
-const handleLogin = async () => {
-  try {
-    const loginPayload = {
-      username,
-      password,
-    };
+  const handleLogin = async () => {
+    try {
+      setLoginError(''); // 🔴 Limpia errores previos
 
-    if (mustAcceptTerms) {
-      loginPayload.accepted_terms = acceptedTerms;
-      if (!acceptedTerms) {
-        alert('Debes aceptar los términos y condiciones antes de continuar.');
+      const loginPayload = { username, password };
+
+      if (mustAcceptTerms) {
+        loginPayload.accepted_terms = acceptedTerms;
+        if (!acceptedTerms) {
+          setLoginError('Debes aceptar los términos y condiciones para continuar.');
+          return;
+        }
+      }
+
+      const response = await api.post('/api/auth/login', loginPayload);
+      const token = response.data.access_token;
+      localStorage.setItem('token', token);
+
+      const perfilResponse = await api.get('/api/auth/me');
+      const user = perfilResponse.data;
+
+      if (!user.accepted_demo_terms) {
+        setShowLegalModal(true);
         return;
       }
-    }
 
-    console.log('Enviando login:', loginPayload);
+      localStorage.setItem('user', JSON.stringify(user));
+      login(token, user);
 
-    // Enviar login
-    const response = await api.post('/api/auth/login', loginPayload);
-    const token = response.data.access_token;
-    localStorage.setItem('token', token);
+      const role = user.role;
+      if (role === 'admin' || role === 'responsable') navigate('/colonias');
+      else if (role === 'voluntario') navigate('/mis-colonias');
+      else if (role === 'veterinario') navigate('/gatos');
+      else if (role === 'usuario') navigate('/mis-gatos');
+      else navigate('/');
 
-    // Obtener perfil del usuario
-    const perfilResponse = await api.get('/api/auth/me');
-    const user = perfilResponse.data;
-    console.log("Perfil recibido:", user);
+      // 🟢 SIN alert de éxito
+    } catch (error) {
+      console.error('Error en login:', error);
 
-    // Validar términos pendientes
-    if (!user.accepted_demo_terms) {
-      setShowLegalModal(true);
-      return; // Espera a que acepte antes de continuar
-    }
+      const detail = error?.response?.data?.detail;
 
-    if (!user.accepted_terms) {
-      console.warn("Backend aún devuelve accepted_terms: false");
-    }
+      if (typeof detail === 'string') {
+        const msg = detail.toLowerCase();
 
-    // Guardar usuario y continuar
-    localStorage.setItem('user', JSON.stringify(user));
-    login(token, user);
-    console.log("Redireccionando a /colonias");
-
-    // Redirigir según rol
-    const role = user.role;
-    if (role === 'admin' || role === 'responsable') navigate('/colonias');
-    else if (role === 'voluntario') navigate('/mis-colonias');
-    else if (role === 'veterinario') navigate('/gatos');
-    else if (role === 'usuario') navigate('/mis-gatos');
-    else navigate('/');
-
-    alert('Inicio de sesión exitoso');
-  } catch (error) {
-    console.error("🔥 Error en login:", error);
-
-    const responseData = error?.response?.data;
-    const detail = responseData?.detail || responseData;
-    console.log("📦 Detalle capturado:", detail);
-
-    if (typeof detail === 'string') {
-      const msg = detail.toLowerCase();
-      if (msg.includes('términos y condiciones')) {
-        setMustAcceptTerms(true);
-        alert('Debes aceptar los términos y condiciones para continuar.');
-      } else if (msg.includes('credentials')) {
-        alert('Credenciales incorrectas. Verifica usuario y contraseña.');
-      } else if (msg.includes('licencia') && msg.includes('expirado')) {
-        alert(detail);
+        if (msg.includes('términos')) {
+          setMustAcceptTerms(true);
+          setLoginError('Debes aceptar los términos y condiciones para continuar.');
+        } else if (msg.includes('credentials') || msg.includes('credenciales')) {
+          setLoginError('El usuario o la contraseña son incorrectos.');
+        } else {
+          setLoginError(detail);
+        }
       } else {
-        alert(detail);
+        setLoginError('No se ha podido iniciar sesión. Inténtalo de nuevo.');
       }
-    } else {
-      alert('Error inesperado al iniciar sesión.');
     }
-  }
-};
+  };
 
   return (
     <KeyHandlerWrapper onEnterPress={handleLogin}>
-      <div className="container mt-5">
-        <div className="card p-4 shadow-sm">
+      <div className="d-flex justify-content-center mt-5 px-3">
+        <div className="card p-4 shadow-sm" style={{ width: '100%', maxWidth: '380px' }}>
           <h1 className="text-center mb-3">Iniciar Sesión</h1>
+
           <input
             className="form-control mb-2"
             type="text"
             placeholder="Usuario"
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setLoginError('');
+            }}
           />
+
           <input
-            className="form-control mb-3"
+            className="form-control mb-2"
             type="password"
             placeholder="Contraseña"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setLoginError('');
+            }}
           />
+
+          {/* 🔴 MENSAJE DE ERROR INLINE */}
+          {loginError && (
+            <div className="text-danger mb-2" style={{ fontSize: '0.9rem' }}>
+              {loginError}
+            </div>
+          )}
+
           <div className="text-end mb-3">
-            <Link to="/solicitar-recuperacion" className="small">¿Olvidaste tu contraseña?</Link>
+            <Link to="/solicitar-recuperacion" className="small">
+              ¿Olvidaste tu contraseña?
+            </Link>
           </div>
+
           {mustAcceptTerms && (
             <>
               <div className="form-check mb-3">
@@ -125,62 +126,37 @@ const handleLogin = async () => {
                   onChange={() => setAcceptedTerms(!acceptedTerms)}
                 />
                 <label className="form-check-label" htmlFor="acceptTerms">
-                  Acepto los <a href="/condiciones-uso" target="_blank">Términos y Condiciones</a> y la <a href="/politica-privacidad" target="_blank">Política de Privacidad</a>.
+                  Acepto los <a href="/condiciones-uso" target="_blank" rel="noreferrer">Términos y Condiciones</a> y la <a href="/politica-privacidad" target="_blank" rel="noreferrer">Política de Privacidad</a>.
                 </label>
               </div>
-
-              <p className="form-text text-muted mt-1" style={{ fontSize: '0.85rem' }}>
-                Al aceptar los términos, das tu consentimiento para el tratamiento de tus datos conforme a la normativa vigente. Esta acción será registrada.
-              </p>
             </>
           )}
+
           {showLegalModal && (
             <LegalModal
               onAccept={async () => {
-                try {
-                  const token = localStorage.getItem('token');
-                  if (!token) {
-                    throw new Error('Token no encontrado en localStorage');
-                  }
+                const token = localStorage.getItem('token');
+                await api.post('/api/auth/accept-demo-terms', null, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
 
-                  // ✅ Llamada al backend para aceptar los términos demo
-                  await api.post('/api/auth/accept-demo-terms', null, {
-                    headers: {
-                      Authorization: `Bearer ${token}`,
-                    },
-                  });
+                const perfilResponse = await api.get('/api/auth/me');
+                const updatedUser = perfilResponse.data;
 
-                  // ✅ Re-obtener el perfil actualizado
-                  const perfilResponse = await api.get('/api/auth/me', {
-                    headers: {
-                      Authorization: `Bearer ${token}`,
-                    },
-                  });
-                  const updatedUser = perfilResponse.data;
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+                login(token, updatedUser);
+                setShowLegalModal(false);
 
-                  // Guardar y continuar
-                  localStorage.setItem('user', JSON.stringify(updatedUser));
-                  login(token, updatedUser);
-
-                  // ✅ Cierra modal al aceptar
-                  setShowLegalModal(false);
-
-                  // Redirección según rol
-                  const role = updatedUser.role;
-                  if (role === 'admin') navigate('/colonias');
-                  else if (role === 'responsable') navigate('/colonias');
-                  else if (role === 'voluntario') navigate('/mis-colonias');
-                  else if (role === 'veterinario') navigate('/gatos');
-                  else if (role === 'usuario') navigate('/mis-gatos');
-                  else navigate('/');
-
-                } catch (error) {
-                  console.error("❌ Error al aceptar los términos demo:", error);
-                  alert("Error al aceptar los términos. Intenta nuevamente.");
-                }
+                const role = updatedUser.role;
+                if (role === 'admin' || role === 'responsable') navigate('/colonias');
+                else if (role === 'voluntario') navigate('/mis-colonias');
+                else if (role === 'veterinario') navigate('/gatos');
+                else if (role === 'usuario') navigate('/mis-gatos');
+                else navigate('/');
               }}
             />
           )}
+
           <button onClick={handleLogin} className="btn btn-primary w-100">
             Iniciar Sesión
           </button>

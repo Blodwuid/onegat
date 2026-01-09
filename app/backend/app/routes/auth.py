@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi_jwt_auth import AuthJWT
-from app.settings import Settings  # Importa la configuración
 from passlib.hash import bcrypt
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -8,13 +7,9 @@ from app.models import User
 from app.schemas import RegisterSchema, LoginSchema, UserResponse
 from pydantic import EmailStr
 from datetime import datetime
+from fastapi_jwt_auth.exceptions import AuthJWTException
 
 auth_router = APIRouter()
-
-# Configuración para AuthJWT
-@AuthJWT.load_config
-def get_config():
-    return Settings()
 
 def get_current_user(Authorize: AuthJWT = Depends(), db: Session = Depends(get_db)):
     try:
@@ -27,7 +22,7 @@ def get_current_user(Authorize: AuthJWT = Depends(), db: Session = Depends(get_d
             raise HTTPException(status_code=401, detail="Usuario no encontrado")
         return usuario
 
-    except Exception as e:
+    except AuthJWTException:
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
 @auth_router.post('/register', tags=["Authentication"])

@@ -1,50 +1,67 @@
-# liberar imágenes huérfanas en el directorio que se quiera ej cd /opt/onegat
-docker image prune -af
-# liberar volúmenes no usados (cuidado)
+COMANDOS seguro y recomendado ENTORNO MULTI-TENANT
+# Limpiar contenedores detenidos (no afecta a los activos)
+docker container prune -f
+# Limpiar imágenes realmente huérfanas (no las usadas por tenants)
+docker image prune -f
+# Limpiar solo volúmenes realmente sin uso  Seguro mientras tengas contenedores levantados (cuidado)
 docker volume prune -f
-# logs ya rotan (10 MB x 3)
+# Limpiar la caché de builds
+docker builder prune -f
+# Ver estado después de la limpieza
+docker system df
+df -h
+code /usr/local/bin
+code /var/log/docker_cleanup_safe.log
+
+# probarlo manualmente
+/usr/local/bin/docker_cleanup_safe.sh
+
 ////////////////////////////////////////////////////////////////////////////
 #### Construye las imágenes comunes (backend y frontend)
-cd /opt/onegat/app
-docker compose -f docker-compose.build.yml build --no-cache
+D:\py\onegat\app
+docker compose -f docker-compose.local.build.yml build --no-cache
 #### Reconstruir imagen del backend (sin caché)
 cd /opt/onegat/app
-docker compose -f docker-compose.build.yml build backend --no-cache
+docker compose -f docker-compose.local.build.yml build --no-cache backend
+
 #### Comprueba que los contenedores estén en ejecución
 docker ps
 
 ############################################################################### Levanta el tenant limpio
-cd /opt/onegat/tenants/laroda
+D:\py\onegat\tenants\laroda
+D:\py\onegat\tenants\prueba
 # por si quedó algo previo (esto no borra imágenes compartidas)
-docker compose -f docker-compose.prod.yml down -v
+docker compose -f docker-compose.local.prod.yml down -v
 
 # levanta usando las imágenes que acabas de construir
-cd /opt/onegat/tenants/laroda
+docker compose -f docker-compose.local.prod.yml --env-file .env.local down
+docker compose -f docker-compose.local.prod.yml --env-file .env.local up -d
 
-docker compose -f docker-compose.prod.yml --env-file .env up -d
-docker compose -f docker-compose.prod.yml down
+# levantar y reconstruir
+docker compose -f docker-compose.local.prod.yml --env-file .env.local up -d --build
+//////////////////////////////////////////////////////////////////////////
 ############################################################################### Modif codigo en backend o frontend
 PASO 1 — Recompilar la imagen global del backend
-cd /opt/onegat/app
-docker compose -f docker-compose.build.yml build backend --no-cache
+D:\py\onegat\app
+docker compose -f docker-compose.local.build.yml build backend --no-cache
 PASO 2 — Reiniciar el backend del tenant que quieras
-cd /opt/onegat/tenants/prueba
-docker compose -f docker-compose.prod.yml up -d backend --force-recreate
+D:\py\onegat\tenants\laroda
+D:\py\onegat\tenants\prueba
+docker compose -f docker-compose.local.prod.yml up -d backend --force-recreate
 
 //////////////////////////////////////////////////////////////////////////
-
 # Ver estado
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 #### Observa los logs de arranque (migraciones)
-docker logs -f backend.laroda.onegat.es-backend
+docker logs -f backend.prueba.onegat.es-backend
 
 # Comprobaciones rápidas - Debe listar tus tablas.
-docker exec -it backend.laroda.onegat.es-backend alembic current
-docker exec -it laroda-db-1 psql -U user -d colonia_gatos -c '\dt'
+docker exec -it backend.prueba.onegat.es-backend alembic current
+docker exec -it prueba-db-1 psql -U user -d colonia_gatos -c '\dt'
 
 # Acceso bd
-docker exec -it laroda-db-1 psql -U user -d colonia_gatos
+docker exec -it prueba-db-1 psql -U user -d colonia_gatos
 
 SELECT * FROM users;
 SELECT * FROM gatos;
