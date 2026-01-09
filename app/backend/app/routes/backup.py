@@ -255,8 +255,8 @@ def list_backups(Authorize: AuthJWT = Depends()):
         raise HTTPException(status_code=403, detail="Unauthorized action")
     
     backups = sorted(
-        os.listdir(BACKUP_DIR),
-        key=lambda f: os.path.getctime(os.path.join(BACKUP_DIR, f)),
+        [f.name for f in BACKUP_DIR_PATH.iterdir() if f.is_file() and FILENAME_RE.fullmatch(f.name)],
+        key=lambda name: (BACKUP_DIR_PATH / name).stat().st_ctime,
         reverse=True
     )
     return {"backups": backups}
